@@ -15,9 +15,14 @@ else
     if command -v brew &>/dev/null; then
         install_step "Installing screen-vision via Homebrew"
         brew install jackyun1024/tap/screen-vision
-        ok "screen-vision installed"
+        ok "screen-vision installed via Homebrew"
+    elif [[ "$(uname -m)" == "arm64" ]]; then
+        install_step "Downloading pre-built binary (Apple Silicon)"
+        curl -sL https://github.com/jackyun1024/mac-screen-vision/releases/download/v1.0.0/screen-vision-1.0.0-arm64-macos.tar.gz | tar xz -C /usr/local/bin/
+        chmod +x /usr/local/bin/screen-vision
+        ok "screen-vision installed to /usr/local/bin/"
     else
-        install_step "Building screen-vision from source"
+        install_step "Building screen-vision from source (Intel)"
         TMPDIR=$(mktemp -d)
         git clone --depth 1 https://github.com/jackyun1024/mac-screen-vision.git "$TMPDIR/sv"
         cd "$TMPDIR/sv" && swift build -c release
