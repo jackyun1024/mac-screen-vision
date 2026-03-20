@@ -19,6 +19,14 @@ Capture any window or screen region, extract text with coordinates, and optional
 
 ## Install
 
+### Homebrew (recommended)
+
+```bash
+brew install jackyun1024/tap/screen-vision
+```
+
+### From source
+
 ```bash
 git clone https://github.com/jackyun1024/mac-screen-vision.git
 cd mac-screen-vision
