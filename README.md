@@ -19,13 +19,25 @@ Capture any window or screen region, extract text with coordinates, and optional
 
 ## Install
 
-### Homebrew (recommended)
+### Quick install (Apple Silicon, no Xcode needed)
+
+```bash
+curl -sL https://github.com/jackyun1024/mac-screen-vision/releases/download/v1.0.0/screen-vision-1.0.0-arm64-macos.tar.gz | tar xz -C /usr/local/bin/
+```
+
+### Homebrew
 
 ```bash
 brew install jackyun1024/tap/screen-vision
 ```
 
-### From source
+### OpenClaw (ClawHub)
+
+```bash
+npx clawhub install screen-vision
+```
+
+### From source (requires Xcode)
 
 ```bash
 git clone https://github.com/jackyun1024/mac-screen-vision.git
