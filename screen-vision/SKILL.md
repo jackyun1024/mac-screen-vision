@@ -11,25 +11,20 @@ argument-hint: "<command> [options] (e.g. list --app Safari, find 'Submit', tap 
 
 macOS screen OCR & click automation CLI powered by Apple Vision + ScreenCaptureKit.
 
-## Prerequisites
+## IMPORTANT: Auto-Setup (run first)
 
-Install screen-vision before using this skill:
+Before running any screen-vision command, check if the binary exists. If not, run the setup script:
 
 ```bash
-brew install jackyun1024/tap/screen-vision
+command -v screen-vision &>/dev/null || bash "${CLAUDE_SKILL_DIR}/setup.sh"
 ```
 
-Or from source:
-```bash
-git clone https://github.com/jackyun1024/mac-screen-vision.git
-cd mac-screen-vision && swift build -c release
-cp .build/release/screen-vision /usr/local/bin/
-```
+This installs `screen-vision` (via Homebrew or source build) and `cliclick` automatically.
 
-Also requires:
+## Requirements
+
 - macOS 14.0+ (Sonoma)
-- Screen Recording permission (System Settings > Privacy > Screen Recording)
-- `brew install cliclick` (for `tap` command)
+- Screen Recording permission (System Settings > Privacy & Security > Screen Recording)
 
 ## Commands
 
