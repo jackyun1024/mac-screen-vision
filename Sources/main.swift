@@ -1,6 +1,7 @@
 import AppKit
 import Vision
 import Foundation
+import ScreenCaptureKit
 
 // MARK: - Models
 
@@ -27,59 +28,71 @@ struct TapResult: Codable {
     let tapped: Bool
 }
 
-// MARK: - Screen Capture
+// MARK: - Screen Capture (ScreenCaptureKit)
 
-func captureRegion(_ region: CGRect) -> CGImage? {
-    CGWindowListCreateImage(
-        region,
-        .optionOnScreenOnly,
-        kCGNullWindowID,
-        [.boundsIgnoreFraming]
-    )
-}
+func captureDisplay(region: CGRect? = nil) async -> (CGImage, CGRect)? {
+    guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+          let display = content.displays.first else { return nil }
 
-func captureFullScreen() -> (CGImage, CGRect)? {
-    guard let mainDisplay = NSScreen.main else { return nil }
-    let screenRect = CGRect(
-        x: 0, y: 0,
-        width: mainDisplay.frame.width,
-        height: mainDisplay.frame.height
+    let filter = SCContentFilter(display: display, excludingWindows: [])
+    let config = SCStreamConfiguration()
+    config.width = display.width
+    config.height = display.height
+    config.showsCursor = false
+
+    if let region = region {
+        config.sourceRect = region
+        config.width = Int(region.width) * 2   // Retina
+        config.height = Int(region.height) * 2
+    }
+
+    guard let image = try? await SCScreenshotManager.captureImage(
+        contentFilter: filter,
+        configuration: config
+    ) else { return nil }
+
+    let screenRect = region ?? CGRect(
+        x: CGFloat(display.frame.origin.x),
+        y: CGFloat(display.frame.origin.y),
+        width: CGFloat(display.width),
+        height: CGFloat(display.height)
     )
-    guard let image = captureRegion(screenRect) else { return nil }
+
     return (image, screenRect)
 }
 
-func captureWindow(appName: String) -> (CGImage, CGRect)? {
-    let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-
-    for window in windowList {
-        guard let ownerName = window[kCGWindowOwnerName as String] as? String,
-              ownerName == appName,
-              let boundsDict = window[kCGWindowBounds as String] as? [String: CGFloat],
-              let x = boundsDict["X"],
-              let y = boundsDict["Y"],
-              let w = boundsDict["Width"],
-              let h = boundsDict["Height"],
-              w > 100, h > 100 else { continue }
-
-        let rect = CGRect(x: x, y: y, width: w, height: h)
-        if let image = captureRegion(rect) {
-            return (image, rect)
-        }
+func captureWindow(appName: String) async -> (CGImage, CGRect)? {
+    guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) else {
+        return nil
     }
-    return nil
+
+    guard let window = content.windows.first(where: {
+        $0.owningApplication?.applicationName == appName && $0.frame.width > 100 && $0.frame.height > 100
+    }) else { return nil }
+
+    let filter = SCContentFilter(desktopIndependentWindow: window)
+    let config = SCStreamConfiguration()
+    config.width = Int(window.frame.width) * 2   // Retina
+    config.height = Int(window.frame.height) * 2
+    config.showsCursor = false
+
+    guard let image = try? await SCScreenshotManager.captureImage(
+        contentFilter: filter,
+        configuration: config
+    ) else { return nil }
+
+    return (image, window.frame)
 }
 
 /// Resolve capture target: explicit region > app window > full screen
-func captureTarget(appName: String?, region: CGRect?) -> (CGImage, CGRect)? {
+func captureTarget(appName: String?, region: CGRect?) async -> (CGImage, CGRect)? {
     if let region = region {
-        guard let img = captureRegion(region) else { return nil }
-        return (img, region)
+        return await captureDisplay(region: region)
     }
     if let app = appName {
-        return captureWindow(appName: app)
+        return await captureWindow(appName: app)
     }
-    return captureFullScreen()
+    return await captureDisplay()
 }
 
 // MARK: - OCR
@@ -136,8 +149,8 @@ func performOCR(image: CGImage, screenRect: CGRect) -> [TextElement] {
 
 // MARK: - Commands
 
-func cmdOCR(appName: String?, region: CGRect?) {
-    guard let (image, rect) = captureTarget(appName: appName, region: region) else {
+func cmdOCR(appName: String?, region: CGRect?) async {
+    guard let (image, rect) = await captureTarget(appName: appName, region: region) else {
         printError("Failed to capture screen")
         exit(1)
     }
@@ -150,8 +163,8 @@ func cmdOCR(appName: String?, region: CGRect?) {
     }
 }
 
-func cmdFind(appName: String?, query: String, region: CGRect?) {
-    guard let (image, rect) = captureTarget(appName: appName, region: region) else {
+func cmdFind(appName: String?, query: String, region: CGRect?) async {
+    guard let (image, rect) = await captureTarget(appName: appName, region: region) else {
         printJSON(FindResult(text: query, x: 0, y: 0, found: false))
         return
     }
@@ -170,8 +183,8 @@ func cmdFind(appName: String?, query: String, region: CGRect?) {
     }
 }
 
-func cmdTap(appName: String?, query: String, region: CGRect?) {
-    guard let (image, rect) = captureTarget(appName: appName, region: region) else {
+func cmdTap(appName: String?, query: String, region: CGRect?) async {
+    guard let (image, rect) = await captureTarget(appName: appName, region: region) else {
         printJSON(TapResult(text: query, x: 0, y: 0, tapped: false))
         return
     }
@@ -196,8 +209,8 @@ func cmdTap(appName: String?, query: String, region: CGRect?) {
     }
 }
 
-func cmdList(appName: String?, region: CGRect?) {
-    guard let (image, rect) = captureTarget(appName: appName, region: region) else {
+func cmdList(appName: String?, region: CGRect?) async {
+    guard let (image, rect) = await captureTarget(appName: appName, region: region) else {
         printError("Failed to capture screen")
         exit(1)
     }
@@ -234,7 +247,7 @@ func parseRegion(_ str: String) -> CGRect? {
 
 func printUsage() {
     let usage = """
-    screen-vision — macOS screen OCR & automation CLI (Apple Vision)
+    screen-vision — macOS screen OCR & automation CLI (Apple Vision + ScreenCaptureKit)
 
     Usage:
       screen-vision ocr  [--app NAME] [--region x,y,w,h]   Full OCR -> JSON
@@ -288,25 +301,33 @@ while i < args.count {
     i += 1
 }
 
-switch command {
-case "ocr":
-    cmdOCR(appName: appName, region: region)
-case "list":
-    cmdList(appName: appName, region: region)
-case "find":
-    guard !query.isEmpty else {
-        printError("Usage: screen-vision find \"text\"")
+// Run async main
+let semaphore = DispatchSemaphore(value: 0)
+
+Task {
+    switch command {
+    case "ocr":
+        await cmdOCR(appName: appName, region: region)
+    case "list":
+        await cmdList(appName: appName, region: region)
+    case "find":
+        guard !query.isEmpty else {
+            printError("Usage: screen-vision find \"text\"")
+            exit(1)
+        }
+        await cmdFind(appName: appName, query: query, region: region)
+    case "tap":
+        guard !query.isEmpty else {
+            printError("Usage: screen-vision tap \"text\"")
+            exit(1)
+        }
+        await cmdTap(appName: appName, query: query, region: region)
+    default:
+        printError("Unknown command: \(command)")
+        printUsage()
         exit(1)
     }
-    cmdFind(appName: appName, query: query, region: region)
-case "tap":
-    guard !query.isEmpty else {
-        printError("Usage: screen-vision tap \"text\"")
-        exit(1)
-    }
-    cmdTap(appName: appName, query: query, region: region)
-default:
-    printError("Unknown command: \(command)")
-    printUsage()
-    exit(1)
+    semaphore.signal()
 }
+
+semaphore.wait()
