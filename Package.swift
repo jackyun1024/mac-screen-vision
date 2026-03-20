@@ -5,9 +5,19 @@ let package = Package(
     name: "screen-vision",
     platforms: [.macOS(.v14)],
     targets: [
+        .target(
+            name: "ScreenVisionLib",
+            path: "Sources/ScreenVisionLib"
+        ),
         .executableTarget(
             name: "screen-vision",
-            path: "Sources"
+            dependencies: ["ScreenVisionLib"],
+            path: "Sources/screen-vision"
+        ),
+        .testTarget(
+            name: "ScreenVisionTests",
+            dependencies: ["ScreenVisionLib"],
+            path: "Tests/ScreenVisionTests"
         )
     ]
 )
